@@ -2,8 +2,7 @@ const express = require('express');
 const mysql = require('mysql2/promise');
 const inquirer = require('inquirer');
 var Table = require('easy-table');
-let list;
-var departmentList = [];
+let departmentList = [];
 let roleList = [];
 let employeeList = [];
 
@@ -24,6 +23,9 @@ const db = mysql.createConnection(
 );
 
 function mainMenu() {
+    departmentList = [];
+    roleList = [];
+    employeeList = [];
     inquirer.prompt([
         {
             type: 'list',
@@ -79,7 +81,6 @@ function displayDepartments(origin) {
         for(let i = 0; i < rows.length; i ++) {
             departmentList[i] = rows[i].department_name;
         }
-        console.log(typeof departmentList);
         if(origin === 'role') {
             addRole();
         } else if(origin === 'employee' || origin === 'updateEmployee') {
@@ -127,30 +128,36 @@ function displayRoles(origin) {
 }
 
 function displayEmployees(origin) {
-    const query = 'SELECT employee.id, first_name, last_name, title, department_name, salary, manager_id FROM employee JOIN role ON role_id = role.id JOIN department ON role.department_id = department.id';
+    const query = 'SELECT employee.id, first_name, last_name, title, department_name, salary, manager_id FROM employee JOIN role ON role_id = role.id JOIN department ON role.department_id = department.id ORDER BY employee.id';
     db.then(conn => conn.query(query))
     .then(([rows, fields]) => {
         for(let i = 0; i < rows.length; i ++) {
             employeeList[i] = rows[i].first_name + " " + rows[i].last_name;
         }
-        employeeList[employeeList.length] = 'null';
         if(origin === 'employee') {
+            employeeList[employeeList.length] = 'null';
             addEmployee();
         } else if(origin === 'updateEmployee') {
             updateEmployee();
         } else {
             let t = new Table
             rows.forEach(function(rows) {
+                let managerName = null;
+
+                for(let i = 0; i < employeeList.length; i++) {
+                    if(rows.manager_id == i) {
+                        managerName = employeeList[i-1];
+                    }
+                }
                 t.cell('id', rows.id)
                 t.cell('first_name', rows.first_name)
                 t.cell('last_name', rows.last_name)
                 t.cell('title', rows.title)
                 t.cell('department', rows.department_name)
                 t.cell('salary', rows.salary)
-                t.cell('manager', rows.manager_id)
+                t.cell('manager', managerName)
                 t.newRow()
             })
-            employeeList[employeeList.length+1] = 'null';
           
             console.log('\n' + t.toString());
             mainMenu();
@@ -179,7 +186,7 @@ function addDepartment() {
     })
     .catch(err => {
         console.log(err);
-    })
+    });
 }
 
 function addRole() {
@@ -252,17 +259,34 @@ function addEmployee() {
     .then((response) => {
         let roleID;
         let managerID;
+        let managerName = response.manager;
         db.then(conn => conn.query(`SELECT id FROM role WHERE title = '${ response.role }'`))
         .then(([rows, fields]) => {
             roleID = rows[0].id;
         })
         .then(() => {
-            let managerName = response.manager.split(" ");
-            db.then(conn => conn.query(`SELECT id FROM employee WHERE first_name = '${ managerName[0] }' AND last_name = '${ managerName[1] }'`))
-            .then(([rows, fields]) => {
-                managerID = rows[0].id;
-            })
-            .then(() => {
+            if(managerName != 'null') {
+                managerName = managerName.split(" ");
+                db.then(conn => conn.query(`SELECT id FROM employee WHERE first_name = '${ managerName[0] }' AND last_name = '${ managerName[1] }'`))
+                .then(([rows, fields]) => {
+                    managerID = rows[0].id;
+                })
+                .then(() => {
+                    let query = `INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${ response.firstName }', '${ response.lastName }', ${ roleID }, ${ managerID })`;
+                    db.then(conn => conn.query(query))
+                    .then(([rows, fields]) => {
+                        for(let i = 0; i < rows.length; i ++) {
+                            employeeList[i] = employeeList[i].first_name + employeeList[i].last_name;
+                        }
+                        console.log(`Added ${ response.firstName } ${ response.lastName } to the database`);
+                        mainMenu();
+                    })
+                    .catch(err => {
+                        console.log(err);
+                    });
+                });
+            } else {
+                managerID = 'NULL';
                 let query = `INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${ response.firstName }', '${ response.lastName }', ${ roleID }, ${ managerID })`;
                 db.then(conn => conn.query(query))
                 .then(([rows, fields]) => {
@@ -275,9 +299,9 @@ function addEmployee() {
                 .catch(err => {
                     console.log(err);
                 });
-            })
-        })
-    })
+            }
+        });
+    });
 }
 
 function updateEmployee() {
