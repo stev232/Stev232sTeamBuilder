@@ -1,7 +1,11 @@
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 const inquirer = require('inquirer');
 var Table = require('easy-table');
+let list;
+var departmentList = [];
+let roleList = [];
+let employeeList = [];
 
 const PORT = process.env.PORT || 3001;
 const app = express();
@@ -16,7 +20,7 @@ const db = mysql.createConnection(
         password: '',
         database: 'team_db'
     },
-    console.log(`Connected to the books_db database.`)
+    console.log(`Connected to the team_db database.`)
 );
 
 function mainMenu() {
@@ -44,12 +48,15 @@ function mainMenu() {
                 addDepartment();
                 break;
             case 'Add a role': 
-                addRole();
+                displayDepartments('role');
                 break;
             case 'Add an employee':
-                addEmployee();
+                displayDepartments('employee');
                 break;
             case 'Update an employee role':
+                displayDepartments('employee');
+                displayRoles('employee');
+                displayEmployees('employee');
                 updateEmployee();
                 break;
             default:
@@ -68,31 +75,88 @@ app.listen(PORT, () => {
 
 mainMenu();
 
-function displayDepartments(isUpdate) {
+function displayDepartments(origin) {
     const query = 'SELECT * FROM department';
-    runQuery(query);
-
-    if(!isUpdate) {
-        mainMenu();
-    }
+    db.then(conn => conn.query(query))
+    .then(([rows, fields]) => {
+        for(let i = 0; i < rows.length; i ++) {
+            departmentList[i] = rows[i].department_name;
+        }
+        console.log(typeof departmentList);
+        if(origin === 'role') {
+            addRole();
+        } else if(origin === 'employee') {
+            displayRoles(origin);
+        } else {
+            let t = new Table
+            rows.forEach(function(rows) {
+                t.cell('id', rows.id)
+                t.cell('name', rows.department_name)
+                t.newRow()
+            })
+          
+            console.log(t.toString());
+            mainMenu();
+        }
+    });
 }
 
-function displayRoles(isUpdate) {
-    const query = 'SELECT * FROM role';
-    runQuery(query);
-    
-    if(!isUpdate) {
-        mainMenu();
-    }
+function displayRoles(origin) {
+    const query = 'SELECT role.id, title, department_name, salary FROM role JOIN department ON role.department_id = department.id';
+    db.then(conn => conn.query(query))
+    .then(([rows, fields]) => {
+        for(let i = 0; i < rows.length; i ++) {
+            roleList[i] = rows[i].title;
+        }
+        if(origin === 'employee') {
+            displayEmployees(origin);
+        } else {
+            let t = new Table
+            rows.forEach(function(rows) {
+                t.cell('id', rows.id)
+                t.cell('title', rows.title)
+                t.cell('department', rows.department_name)
+                t.cell('salary', rows.salary)
+                t.newRow()
+            })
+          
+            console.log(t.toString());
+            mainMenu();
+        }
+    })
+    .catch(err => {
+        console.log(err);
+    });
 }
 
-function displayEmployees(isUpdate) {
-    const query = 'SELECT * FROM employee';
-    runQuery(query);
-    
-    if(!isUpdate) {
-        mainMenu();
-    }
+function displayEmployees(origin) {
+    const query = 'SELECT employee.id, first_name, last_name, title, department_name, salary, manager_id FROM employee JOIN role ON role_id = role.id JOIN department ON role.department_id = department.id';
+    db.then(conn => conn.query(query))
+    .then(([rows, fields]) => {
+        for(let i = 0; i < rows.length; i ++) {
+            employeeList[i] = rows[i].first_name + " " + rows[i].last_name;
+        }
+        employeeList[employeeList.length] = 'null';
+        if(origin === 'employee') {
+            addEmployee();
+        } else {
+            let t = new Table
+            rows.forEach(function(rows) {
+                t.cell('id', rows.id)
+                t.cell('first_name', rows.first_name)
+                t.cell('last_name', rows.last_name)
+                t.cell('title', rows.title)
+                t.cell('department', rows.department_name)
+                t.cell('salary', rows.salary)
+                t.cell('manager', rows.manager_id)
+                t.newRow()
+            })
+            employeeList[employeeList.length+1] = 'null';
+          
+            console.log('\n' + t.toString());
+            mainMenu();
+        }
+    });
 }
 
 function addDepartment() {
@@ -103,9 +167,20 @@ function addDepartment() {
             name: 'department',
         },
     ])
-    let query = 'INSERT * FROM department';
-    runQuery(query);
-    mainMenu();
+    .then((response) => {
+        let query = `INSERT INTO department (department_name) VALUES ("${ response.department }")`;
+        db.then(conn => conn.query(query))
+        .then((result) => {
+            console.log(`Added ${ response.department } to the database`);
+            mainMenu();
+        })
+        .catch(err => {
+            console.log(err);
+        });
+    })
+    .catch(err => {
+        console.log(err);
+    })
 }
 
 function addRole() {
@@ -117,18 +192,37 @@ function addRole() {
         },
         {
             type: 'input',
-            meesage: 'What is the salary for this role?',
+            message: 'What is the salary for this role?',
             name: 'roleSalary',
         },
         {
-            type: 'choice',
-            message: 'What department does this role belong to?',
+            type: 'list',
             name: 'department',
-        }
+            message: 'What department does this role belong to?',
+            choices: departmentList,
+        },
     ])
-    let query = 'INSERT * FROM role';
-    runQuery(query);
-    mainMenu();
+    .then((response) => {
+        for(let i = 0; i < departmentList.length; i++) {
+            if(departmentList[i]===response.department) {
+                let query = `INSERT INTO role (title, salary, department_id) VALUES ("${ response.roleTitle }", "${ response.roleSalary }", "${ i+1 }")`;
+                db.then(conn => conn.query(query))
+                .then(([rows, fields]) => {
+                    for(let i = 0; i < rows.length; i ++) {
+                        roleList[i] = rows[i].title;
+                    }
+                    console.log(`Added ${ response.roleTitle } to the database`);
+                    mainMenu();
+                })
+                .catch(err => {
+                    console.log(err);
+                });
+            }
+        }
+    })
+    .catch(err => {
+        console.log(err);
+    });   
 }
 
 function addEmployee() {
@@ -144,13 +238,47 @@ function addEmployee() {
             name: 'lastName',
         },
         {
-            type: 'choice',
-            message: 'What role does this employee belong too?'
-        }
+            type: 'list',
+            message: 'What role does this employee belong too?',
+            choices: roleList,
+            name: 'role',
+        },
+        {
+            type: 'list',
+            message: 'Who is this employees manager?',
+            choices: employeeList,
+            name: 'manager',
+        },
     ])
-    let query = 'INSERT * FROM employee';
-    runQuery(query);
-    mainMenu();
+    .then((response) => {
+        let roleID;
+        let managerID;
+        db.then(conn => conn.query(`SELECT id FROM role WHERE title = '${ response.role }'`))
+        .then(([rows, fields]) => {
+            roleID = rows[0].id;
+        })
+        .then(() => {
+            let managerName = response.manager.split(" ");
+            db.then(conn => conn.query(`SELECT id FROM employee WHERE first_name = '${ managerName[0] }' AND last_name = '${ managerName[1] }'`))
+            .then(([rows, fields]) => {
+                managerID = rows[0].id;
+            })
+            .then(() => {
+                let query = `INSERT INTO employee (first_name, last_name, role_id, manager_id) VALUES ('${ response.firstName }', '${ response.lastName }', ${ roleID }, ${ managerID })`;
+                db.then(conn => conn.query(query))
+                .then(([rows, fields]) => {
+                    for(let i = 0; i < rows.length; i ++) {
+                        employeeList[i] = employeeList[i].first_name + employeeList[i].last_name;
+                    }
+                    console.log(`Added ${ response.firstName } ${ response.lastName } to the database`);
+                    mainMenu();
+                })
+                .catch(err => {
+                    console.log(err);
+                });
+            })
+        })
+    })
 }
 
 function updateEmployee() {
@@ -160,13 +288,4 @@ function updateEmployee() {
     let query = `INSERT * FROM employee WHERE employee.id=${ id }`;
     runQuery(query);
     mainMenu();
-}
-
-function runQuery(query) {
-    /*db.query(query, function (err, results) {
-        console.log(query);
-        menuInquirer();
-    });*/
-    console.log(query);
-
 }
