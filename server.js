@@ -134,8 +134,8 @@ function displayEmployees(origin) {
         for(let i = 0; i < rows.length; i ++) {
             employeeList[i] = rows[i].first_name + " " + rows[i].last_name;
         }
-        employeeList[employeeList.length] = 'null';
         if(origin === 'employee') {
+            employeeList[employeeList.length] = 'null';
             addEmployee();
         } else if(origin === 'updateEmployee') {
             updateEmployee();
