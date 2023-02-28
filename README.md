@@ -2,6 +2,11 @@
 
 ## Description
 
+In this project I use a sql script to create a database along with three tables. The user will input data that will populate each of these tables using inquirer. The user can also view the data that is in each table and this is done by using easy-table. This project demonstrates the usage of SELECT, INSERT INTO, UPDATE, and JOIN sql commands. This project also displays the usage of a menu system in inquirer by using the input type of list. To help pace the database calls this project also uses mysql2-promise instead of just using mysql2. This allows me to force the script to wait for a response from the db before running the next command.
+
+## Installation
+
+In order to run this project you will need to manually enter your database password into line 19 "password: 'enter password here'". Then you will need to do "mysql -u root -p" in your terminal. After you enter mysql command interface you will then run "./db/schema.db". This will build your database and set up your tables. You can now exit the mysql command interface and run "npm run".
 
 ## Acceptance Criteria
 
@@ -41,3 +46,7 @@ __WHEN__ I choose to update an employee role <br>
     * manager_id: INT to hold reference to another employee that is the manager of the current employee (null if the employee has no manager)
 
 ![path](./images/DatabaseStructure.png)
+
+## Demo Video
+
+https://drive.google.com/file/d/1CfqW4y728My16Rl2evf6RRkehR-MA20w/view
