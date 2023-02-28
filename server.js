@@ -30,7 +30,7 @@ function mainMenu() {
             name: 'mainMenu',
             message: 'What would you like to do?',
             choices: ['View all departments', 'View all roles', 'View all employees', 
-            'Add a department', 'Add a role', 'Add an employee', 'Update an employee role', 'QUIT'],
+            'Add a department', 'Add a role', 'Add an employee', 'Update an employees role', 'QUIT'],
         },
     ])
     .then((response) => {
@@ -53,11 +53,8 @@ function mainMenu() {
             case 'Add an employee':
                 displayDepartments('employee');
                 break;
-            case 'Update an employee role':
-                displayDepartments('employee');
-                displayRoles('employee');
-                displayEmployees('employee');
-                updateEmployee();
+            case 'Update an employees role':
+                displayDepartments('updateEmployee');
                 break;
             default:
                 process.exit();
@@ -85,7 +82,7 @@ function displayDepartments(origin) {
         console.log(typeof departmentList);
         if(origin === 'role') {
             addRole();
-        } else if(origin === 'employee') {
+        } else if(origin === 'employee' || origin === 'updateEmployee') {
             displayRoles(origin);
         } else {
             let t = new Table
@@ -108,7 +105,7 @@ function displayRoles(origin) {
         for(let i = 0; i < rows.length; i ++) {
             roleList[i] = rows[i].title;
         }
-        if(origin === 'employee') {
+        if(origin === 'employee' || origin === 'updateEmployee') {
             displayEmployees(origin);
         } else {
             let t = new Table
@@ -139,6 +136,8 @@ function displayEmployees(origin) {
         employeeList[employeeList.length] = 'null';
         if(origin === 'employee') {
             addEmployee();
+        } else if(origin === 'updateEmployee') {
+            updateEmployee();
         } else {
             let t = new Table
             rows.forEach(function(rows) {
@@ -283,9 +282,59 @@ function addEmployee() {
 
 function updateEmployee() {
     inquirer.prompt([
-
+        {
+            type: 'list',
+            message: `Which employee's role do you want to update?`,
+            name: 'employee',
+            choices: employeeList,
+        },
     ])
-    let query = `INSERT * FROM employee WHERE employee.id=${ id }`;
-    runQuery(query);
-    mainMenu();
+    .then((response) => {
+        let employeeID;
+        let roleID;
+        let employee = response.employee.split(" ");
+        db.then(conn => conn.query(`SELECT id FROM employee WHERE first_name = '${ employee[0] }' AND last_name = '${ employee[1] }'`))
+        .then(([rows, fields]) => {
+            employeeID = rows[0].id;
+        })
+        .then(() => {
+            inquirer.prompt([
+                {
+                    type: 'list',
+                    message: `Which employee's role do you want to update?`,
+                    name: 'role',
+                    choices: roleList,
+                },
+            ])
+            .then((response) => {
+                db.then(conn => conn.query(`SELECT id FROM role WHERE title = '${ response.role }'`))
+                .then(([rows, fields]) => {
+                    roleID = rows[0].id;
+                })
+                .then(() => {
+                    let query = `UPDATE employee SET role_id = '${ roleID }' WHERE employee.id = '${ employeeID }'`;
+                    db.then(conn => conn.query(query))
+                    .then(() => {
+                        console.log(`Updated employee's role`);
+                        mainMenu();
+                    })
+                    .catch((err) => {
+                        console.log(err);
+                    });
+                })
+                .catch((err) => {
+                    console.log(err);
+                });
+            })
+            .catch((err) => {
+                console.log(err);
+            });            
+        })
+        .catch((err) => {
+            console.log(err);
+        });
+    })
+    .catch((err) => {
+        console.log(err);
+    });
 }
